@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Sistema de Busca de Decretos e Leis</title>
+    <title>Consulta Regulamentação Municipal - Nova lei de Licitações e Contratos Públicos</title>
     <style>
         body {
             font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
@@ -64,7 +64,7 @@
             margin-top: 20px;
         }
         
-        /* Estilo para os "quadrantes" de resultados de cada decreto */
+        /* Novo estilo para os "quadrantes" de resultados de cada decreto */
         .decree-results-quadrant {
             background-color: #eaf3f8; /* Um azul bem clarinho para o quadrante */
             border: 1px solid #cce7f4;
@@ -166,22 +166,18 @@
         const resultsContainer = document.getElementById('resultsContainer');
         const documentDisplay = document.getElementById('documentDisplay');
 
+        // Array para armazenar os documentos carregados
         let loadedDocuments = [];
 
-        // --- CONFIGURAÇÃO DE CARREGAMENTO (APENAS LINKS EXTERNOS) ---
-        // Definido como false para usar links externos.
-        const USE_EMBEDDED_HTML = false; 
-
-        // --- ARQUIVOS EXTERNOS/LOCAIS (PARA USE_EMBEDDED_HTML = false) ---
-        // Liste os URLs completos para seus arquivos HTML.
-        // Certifique-se de que os servidores que hospedam esses arquivos permitam CORS para seu domínio (Google Sites).
-        const externalDocumentPaths = [
-            'https://www.planalto.gov.br/ccivil_03/_ato2019-2022/2021/lei/l14133.htm',
-            // Adicione mais URLs de decretos/leis aqui.
-            // Exemplo de outro link: 'https://seusite.com/caminho/para/seu_decreto.html'
+        // Lista de arquivos de decreto/lei na pasta 'decretos/'
+        // ADICIONE AQUI OS NOMES DOS SEUS ARQUIVOS HTML DE DECRETOS/LEIS
+        const documentFiles = [
+            'DECRETO Nº 007-2024 - REGULAMENTA INEXIGIBILIDADE E DISPENSA.html',
+            'DECRETO Nº 027-2024 – REGULA PESQUISA, SISTEMA E LICITAÇÃO NO CRITÉRIO DE MENOR PREÇO.html',
+            'DECRETO Nº 038-2024 – REGULA ART. 79 DA LEI 14.133, 1º DE ABRIL 2021, SOBRE CREDENCIAMENTO A CONTRATAÇÃO DE BENS E SERVIÇOS NA ADM PÚBLICA.html',
+            'DECRETO Nº 079-2023 - REGULAMENTA A LEI FEDERAL Nº 14.133 NOS ÓRGÃOS E ENTIDADES DA ADMINISTRAÇÃO VINCULADOS AO PODER EXECUTIVO MUNICIPAL.html',
+            // Adicione mais nomes de arquivos aqui conforme você criar
         ];
-
-        // --- FUNÇÕES GERAIS ---
 
         // Normaliza string (remove acentos e torna minúscula)
         function normalizeText(text) {
@@ -194,90 +190,70 @@
                 loadedDocuments = [];
                 documentSelector.innerHTML = '<option value="">Selecione um decreto/lei</option>';
 
-                let filesToProcess = [];
-                if (USE_EMBEDDED_HTML) {
-                    // Esta parte não será usada pois USE_EMBEDDED_HTML é false
-                    // Mas é mantida para completar a estrutura condicional
-                    filesToProcess = Object.keys(embeddedDecreeHtmlContents).map(fileName => ({
-                        name: fileName,
-                        content: embeddedDecreeHtmlContents[fileName]
-                    }));
-                } else {
-                    // Carrega arquivos externos via fetch
-                    const fetches = externalDocumentPaths.map(async filePath => {
-                        try {
-                            const response = await fetch(filePath);
-                            if (!response.ok) {
-                                // Se o status for 0, pode ser um erro de CORS ou rede
-                                const statusInfo = response.status === 0 ? "Possível erro de CORS ou rede." : `Erro ${response.status}: ${response.statusText}`;
-                                throw new Error(`Falha ao carregar ${filePath}: ${statusInfo}`);
-                            }
-                            const htmlText = await response.text();
-                            // Extrai o nome do arquivo do URL para usar como ID e título
-                            const fileName = filePath.substring(filePath.lastIndexOf('/') + 1); 
-                            return { name: fileName, content: htmlText };
-                        } catch (innerError) {
-                            console.error(`Falha ao carregar o arquivo "${filePath}":`, innerError);
-                            return null; // Retorna null para indicar falha
+                const fetches = documentFiles.map(async file => {
+                    try {
+                        const response = await fetch(`decretos/${file}`);
+                        if (!response.ok) {
+                            throw new Error(`Erro ${response.status} ao carregar ${file}: ${response.statusText}`);
                         }
-                    });
-                    filesToProcess = (await Promise.all(fetches)).filter(item => item !== null); // Filtra os que falharam
-                }
+                        const htmlText = await response.text();
 
-                // Processa os arquivos (seja embutidos ou externos)
-                for (const item of filesToProcess) {
-                    const { name: file, content: htmlText } = item;
-                    
-                    const parser = new DOMParser();
-                    const doc = parser.parseFromString(htmlText, 'text/html');
-                    // Tenta obter o título da tag <title> do HTML, senão usa o nome do arquivo
-                    const docTitleElement = doc.querySelector('head title');
-                    const docTitle = docTitleElement ? docTitleElement.textContent.trim() : file.replace('.html', '');
+                        const parser = new DOMParser();
+                        const doc = parser.parseFromString(htmlText, 'text/html');
 
-                    const textBlocks = [];
-                    doc.body.childNodes.forEach(node => {
-                        if (node.nodeType === Node.ELEMENT_NODE) {
-                            if (['P', 'DIV', 'H1', 'H2', 'H3', 'LI', 'SPAN'].includes(node.tagName)) {
-                                const originalHtmlContent = node.outerHTML; 
-                                const textContent = node.textContent.trim(); 
+                        // Título do documento será o nome do arquivo sem a extensão
+                        const docTitle = file.replace('.html', '');
 
+                        const textBlocks = [];
+                        // Itera sobre todos os nós filhos do body para capturar blocos de texto
+                        doc.body.childNodes.forEach(node => {
+                            if (node.nodeType === Node.ELEMENT_NODE) {
+                                // Priorizamos P, DIV, e cabeçalhos, mas você pode ajustar se seus decretos
+                                // usam outras tags para artigos.
+                                if (['P', 'DIV', 'H1', 'H2', 'H3', 'LI', 'SPAN'].includes(node.tagName)) {
+                                    const originalHtmlContent = node.outerHTML; 
+                                    const textContent = node.textContent.trim(); 
+
+                                    if (textContent) {
+                                        textBlocks.push({
+                                            originalHtml: originalHtmlContent,
+                                            normalizedText: normalizeText(textContent)
+                                        });
+                                    }
+                                }
+                            } else if (node.nodeType === Node.TEXT_NODE) { 
+                                const textContent = node.textContent.trim();
                                 if (textContent) {
                                     textBlocks.push({
-                                        originalHtml: originalHtmlContent,
+                                        originalHtml: `<span>${textContent}</span>`, // Envolve texto solto em span
                                         normalizedText: normalizeText(textContent)
                                     });
                                 }
                             }
-                        } else if (node.nodeType === Node.TEXT_NODE) { 
-                            const textContent = node.textContent.trim();
-                            if (textContent) {
-                                textBlocks.push({
-                                    originalHtml: `<span>${textContent}</span>`, 
-                                    normalizedText: normalizeText(textContent)
-                                });
-                            }
-                        }
-                    });
+                        });
 
-                    loadedDocuments.push({
-                        id: file, // O ID agora é o nome do arquivo (ou último segmento do URL)
-                        title: docTitle,
-                        originalFullHtml: htmlText, 
-                        articles: textBlocks 
-                    });
+                        loadedDocuments.push({
+                            id: file, // Usar o nome do arquivo como ID
+                            title: docTitle,
+                            originalFullHtml: htmlText, // Guarda o HTML original completo para exibição completa
+                            articles: textBlocks // Armazena os blocos de texto como "artigos"
+                        });
 
-                    const option = document.createElement('option');
-                    option.value = file;
-                    option.textContent = docTitle;
-                    documentSelector.appendChild(option);
-                }
+                        // Adiciona ao seletor
+                        const option = document.createElement('option');
+                        option.value = file;
+                        option.textContent = docTitle;
+                        documentSelector.appendChild(option);
+                    } catch (innerError) {
+                        console.error(`Falha ao carregar ou processar o arquivo "${file}":`, innerError);
+                        // Poderíamos adicionar uma notificação ao usuário aqui, mas por enquanto, apenas logar.
+                    }
+                });
 
-                if (loadedDocuments.length === 0) {
-                    resultsContainer.innerHTML = '<p class="no-results" style="color: red;">Nenhum documento foi carregado. Verifique os URLs e permissões de CORS.</p>';
-                } else {
-                    console.log('Documentos carregados com sucesso!', loadedDocuments);
-                    resultsContainer.innerHTML = '<p class="no-results">Digite uma palavra-chave para iniciar a busca ou selecione um documento acima para visualizá-lo.</p>';
-                }
+                await Promise.all(fetches);
+                console.log('Documentos carregados com sucesso!', loadedDocuments);
+                // Define a mensagem inicial após o carregamento
+                resultsContainer.innerHTML = '<p class="no-results">Digite uma palavra-chave para iniciar a busca ou selecione um documento acima para visualizá-lo.</p>';
 
             } catch (error) {
                 console.error('Erro geral ao carregar documentos:', error);
@@ -304,6 +280,7 @@
                 
                 doc.articles.forEach(article => {
                     if (article.normalizedText.includes(searchTerm)) {
+                        // Se for a primeira vez que encontramos algo neste decreto, inicializamos o array
                         if (!resultsByDecree[doc.id]) {
                             resultsByDecree[doc.id] = {
                                 title: docTitle,
@@ -311,9 +288,11 @@
                             };
                         }
 
+                        // Criar uma cópia do HTML original do artigo para manipular e adicionar o highlight
                         const tempDiv = document.createElement('div');
                         tempDiv.innerHTML = article.originalHtml;
 
+                        // Percorre os nós de texto dentro do elemento para aplicar o highlight
                         const walk = document.createTreeWalker(tempDiv, NodeFilter.SHOW_TEXT, null, false);
                         let node;
                         const nodesToReplace = [];
@@ -340,6 +319,7 @@
             });
 
             let totalFoundArticles = 0;
+            // Iterar sobre os resultados agrupados para construir o HTML final
             for (const docId in resultsByDecree) {
                 if (resultsByDecree.hasOwnProperty(docId)) {
                     const decreeData = resultsByDecree[docId];
@@ -351,19 +331,17 @@
                     `;
 
                     decreeData.foundArticles.forEach(articleHtml => {
+                        // Opcional: Tentar identificar se é um "Artigo" para adicionar um prefixo
                         const tempDivForText = document.createElement('div');
                         tempDivForText.innerHTML = articleHtml;
                         const firstLineText = tempDivForText.textContent.trim().split('\n')[0];
                         let articleLabel = '';
-                        // Melhorado para pegar Art. completo, ou Cap., § etc.
-                        const match = firstLineText.match(/^(artigo|art)\.?\s*(\d+\S*)|(capítulo|cap\.)\s*(\d+\S*)|(parágrafo|parágrafos|§)\s*(\d+\S*|\S*)/i);
-
-                        if (match) {
-                            if (match[1]) articleLabel = `<span class="doc-reference">Artigo ${match[2]}:</span>`; // Artigo X
-                            else if (match[3]) articleLabel = `<span class="doc-reference">Capítulo ${match[4]}:</span>`; // Capítulo X
-                            else if (match[5]) articleLabel = `<span class="doc-reference">${match[5].charAt(0).toUpperCase() + match[5].slice(1)} ${match[6] || ''}:</span>`; // Parágrafo X, Seção X, § X
+                        if (firstLineText.match(/^(artigo|art)\.?\s+\d+|capítulo|cap\.\s+\d+|parágrafo|parágrafos|seção|seções|§/i)) {
+                            // Pega a primeira linha ou um trecho que pareça um título de artigo/seção
+                            articleLabel = `<span class="doc-reference">Artigo/Seção:</span>`;
                         } else {
-                            articleLabel = `<span class="doc-reference">Trecho relevante:</span>`;
+                             // Se não for um artigo claro, apenas um parágrafo que contém o termo
+                             articleLabel = `<span class="doc-reference">Trecho relevante:</span>`;
                         }
                         
                         decreeHtml += `
@@ -374,7 +352,7 @@
                         `;
                     });
 
-                    decreeHtml += `</div>`; 
+                    decreeHtml += `</div>`; // Fecha o quadrante do decreto
                     resultsContainer.innerHTML += decreeHtml;
                 }
             }
@@ -386,11 +364,12 @@
             }
         }
 
+        // Exibição de Documento Completo
         function displaySelectedDocument() {
             const selectedFile = documentSelector.value;
-            resultsContainer.innerHTML = ''; 
-            searchInput.value = ''; 
-            documentDisplay.style.display = 'block'; 
+            resultsContainer.innerHTML = ''; // Limpa resultados da busca
+            searchInput.value = ''; // Limpa o campo de busca
+            documentDisplay.style.display = 'block'; // Mostra a área de exibição
 
             if (selectedFile === "") {
                 documentDisplay.innerHTML = '<p class="no-results">Selecione um documento para visualizá-lo.</p>';
@@ -399,12 +378,14 @@
 
             const doc = loadedDocuments.find(d => d.id === selectedFile);
             if (doc) {
+                // Exibe o HTML original completo do documento
                 documentDisplay.innerHTML = `<div class="document-full-content">${doc.originalFullHtml}</div>`;
             } else {
                 documentDisplay.innerHTML = '<p class="no-results" style="color: red;">Erro: Documento não encontrado.</p>';
             }
         }
 
+        // Event Listeners
         document.addEventListener('DOMContentLoaded', loadDocuments);
         searchButton.addEventListener('click', performSearch);
         searchInput.addEventListener('keypress', (e) => {
