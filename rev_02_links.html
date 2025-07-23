@@ -1,0 +1,419 @@
+<!DOCTYPE html>
+<html lang="pt-br">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Sistema de Busca de Decretos e Leis</title>
+    <style>
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            margin: 0;
+            padding: 20px;
+            background-color: #f4f7f6;
+            color: #333;
+        }
+        .container {
+            max-width: 1600px;
+            margin: 20px auto;
+            background-color: #fff;
+            padding: 30px;
+            border-radius: 10px;
+            box-shadow: 0 4px 15px rgba(0, 0, 0, 0.1);
+        }
+        h1, h2 {
+            color: #2c3e50;
+            text-align: center;
+            margin-bottom: 25px;
+        }
+        .search-section, .filter-section {
+            display: flex;
+            gap: 10px;
+            margin-bottom: 20px;
+            align-items: center;
+        }
+        .search-section input[type="text"] {
+            flex-grow: 1;
+            padding: 12px;
+            border: 1px solid #ccc;
+            border-radius: 5px;
+            font-size: 16px;
+        }
+        .search-section button, .filter-section select {
+            padding: 12px 20px;
+            background-color: #3498db;
+            color: white;
+            border: none;
+            border-radius: 5px;
+            cursor: pointer;
+            font-size: 16px;
+            transition: background-color 0.3s ease;
+        }
+        .search-section button:hover, .filter-section select:hover {
+            background-color: #2980b9;
+        }
+        .filter-section select {
+            flex-grow: 1;
+            padding: 10px;
+            border: 1px solid #ccc;
+            border-radius: 5px;
+            background-color: #f9f9f9;
+        }
+        #resultsContainer, #documentDisplay {
+            border-top: 1px solid #eee;
+            padding-top: 20px;
+            margin-top: 20px;
+        }
+        
+        /* Estilo para os "quadrantes" de resultados de cada decreto */
+        .decree-results-quadrant {
+            background-color: #eaf3f8; /* Um azul bem clarinho para o quadrante */
+            border: 1px solid #cce7f4;
+            padding: 20px;
+            margin-bottom: 25px; /* Espaço entre os quadrantes de decretos diferentes */
+            border-radius: 8px;
+            box-shadow: 0 2px 8px rgba(0, 0, 0, 0.08);
+        }
+
+        .decree-results-quadrant .decree-title {
+            font-weight: bold;
+            color: #2c3e50;
+            font-size: 1.4em;
+            margin-bottom: 15px;
+            display: block;
+            text-align: center;
+            padding-bottom: 10px;
+            border-bottom: 2px solid #3498db; /* Linha azul para destacar o título do decreto */
+        }
+
+        .document-card {
+            background-color: #ffffff; /* Fundo branco para o card do artigo dentro do quadrante */
+            border: 1px solid #eee;
+            padding: 15px;
+            margin-bottom: 15px;
+            border-radius: 8px;
+            box-shadow: 0 2px 5px rgba(0,0,0,0.05);
+        }
+        .document-card .doc-reference {
+            font-weight: bold;
+            color: #34495e;
+            margin-bottom: 10px;
+            display: block;
+            border-bottom: 1px solid #ddd;
+            padding-bottom: 5px;
+        }
+        .document-card .found-paragraph {
+            line-height: 1.6;
+            margin-top: 10px;
+            margin-bottom: 0;
+        }
+        .highlight {
+            background-color: #ffe082; /* Amarelo mais suave */
+            padding: 2px 4px;
+            border-radius: 3px;
+        }
+        #documentDisplay h2 {
+            text-align: left;
+            margin-bottom: 15px;
+        }
+        #documentDisplay p {
+            line-height: 1.6;
+            margin-bottom: 10px;
+        }
+        .no-results {
+            color: #777;
+            text-align: center;
+            padding: 20px;
+        }
+        .loading-message {
+            text-align: center;
+            padding: 20px;
+            color: #555;
+            font-style: italic;
+        }
+    </style>
+</head>
+<body>
+
+    <div class="container">
+        <h1>Sistema Integrado de Decretos e Leis</h1>
+
+        <div class="search-section">
+            <input type="text" id="searchInput" placeholder="Buscar por palavra-chave..." aria-label="Palavra-chave para busca">
+            <button id="searchButton">Buscar</button>
+        </div>
+
+        <div class="filter-section">
+            <label for="documentSelector" style="white-space: nowrap;">Ver Documento:</label>
+            <select id="documentSelector">
+                <option value="">Selecione um decreto/lei</option>
+            </select>
+        </div>
+
+        <hr>
+
+        <div id="resultsContainer">
+            <p class="no-results">Digite uma palavra-chave para iniciar a busca ou selecione um documento acima para visualizá-lo.</p>
+        </div>
+
+        <div id="documentDisplay" style="display: none;">
+        </div>
+    </div>
+
+    <script>
+        const searchInput = document.getElementById('searchInput');
+        const searchButton = document.getElementById('searchButton');
+        const documentSelector = document.getElementById('documentSelector');
+        const resultsContainer = document.getElementById('resultsContainer');
+        const documentDisplay = document.getElementById('documentDisplay');
+
+        let loadedDocuments = [];
+
+        // --- CONFIGURAÇÃO DE CARREGAMENTO (APENAS LINKS EXTERNOS) ---
+        // Definido como false para usar links externos.
+        const USE_EMBEDDED_HTML = false; 
+
+        // --- ARQUIVOS EXTERNOS/LOCAIS (PARA USE_EMBEDDED_HTML = false) ---
+        // Liste os URLs completos para seus arquivos HTML.
+        // Certifique-se de que os servidores que hospedam esses arquivos permitam CORS para seu domínio (Google Sites).
+        const externalDocumentPaths = [
+            'https://www.planalto.gov.br/ccivil_03/_ato2019-2022/2021/lei/l14133.htm',
+            // Adicione mais URLs de decretos/leis aqui.
+            // Exemplo de outro link: 'https://seusite.com/caminho/para/seu_decreto.html'
+        ];
+
+        // --- FUNÇÕES GERAIS ---
+
+        // Normaliza string (remove acentos e torna minúscula)
+        function normalizeText(text) {
+            return text.normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase();
+        }
+
+        async function loadDocuments() {
+            resultsContainer.innerHTML = '<p class="loading-message">Carregando documentos...</p>';
+            try {
+                loadedDocuments = [];
+                documentSelector.innerHTML = '<option value="">Selecione um decreto/lei</option>';
+
+                let filesToProcess = [];
+                if (USE_EMBEDDED_HTML) {
+                    // Esta parte não será usada pois USE_EMBEDDED_HTML é false
+                    // Mas é mantida para completar a estrutura condicional
+                    filesToProcess = Object.keys(embeddedDecreeHtmlContents).map(fileName => ({
+                        name: fileName,
+                        content: embeddedDecreeHtmlContents[fileName]
+                    }));
+                } else {
+                    // Carrega arquivos externos via fetch
+                    const fetches = externalDocumentPaths.map(async filePath => {
+                        try {
+                            const response = await fetch(filePath);
+                            if (!response.ok) {
+                                // Se o status for 0, pode ser um erro de CORS ou rede
+                                const statusInfo = response.status === 0 ? "Possível erro de CORS ou rede." : `Erro ${response.status}: ${response.statusText}`;
+                                throw new Error(`Falha ao carregar ${filePath}: ${statusInfo}`);
+                            }
+                            const htmlText = await response.text();
+                            // Extrai o nome do arquivo do URL para usar como ID e título
+                            const fileName = filePath.substring(filePath.lastIndexOf('/') + 1); 
+                            return { name: fileName, content: htmlText };
+                        } catch (innerError) {
+                            console.error(`Falha ao carregar o arquivo "${filePath}":`, innerError);
+                            return null; // Retorna null para indicar falha
+                        }
+                    });
+                    filesToProcess = (await Promise.all(fetches)).filter(item => item !== null); // Filtra os que falharam
+                }
+
+                // Processa os arquivos (seja embutidos ou externos)
+                for (const item of filesToProcess) {
+                    const { name: file, content: htmlText } = item;
+                    
+                    const parser = new DOMParser();
+                    const doc = parser.parseFromString(htmlText, 'text/html');
+                    // Tenta obter o título da tag <title> do HTML, senão usa o nome do arquivo
+                    const docTitleElement = doc.querySelector('head title');
+                    const docTitle = docTitleElement ? docTitleElement.textContent.trim() : file.replace('.html', '');
+
+                    const textBlocks = [];
+                    doc.body.childNodes.forEach(node => {
+                        if (node.nodeType === Node.ELEMENT_NODE) {
+                            if (['P', 'DIV', 'H1', 'H2', 'H3', 'LI', 'SPAN'].includes(node.tagName)) {
+                                const originalHtmlContent = node.outerHTML; 
+                                const textContent = node.textContent.trim(); 
+
+                                if (textContent) {
+                                    textBlocks.push({
+                                        originalHtml: originalHtmlContent,
+                                        normalizedText: normalizeText(textContent)
+                                    });
+                                }
+                            }
+                        } else if (node.nodeType === Node.TEXT_NODE) { 
+                            const textContent = node.textContent.trim();
+                            if (textContent) {
+                                textBlocks.push({
+                                    originalHtml: `<span>${textContent}</span>`, 
+                                    normalizedText: normalizeText(textContent)
+                                });
+                            }
+                        }
+                    });
+
+                    loadedDocuments.push({
+                        id: file, // O ID agora é o nome do arquivo (ou último segmento do URL)
+                        title: docTitle,
+                        originalFullHtml: htmlText, 
+                        articles: textBlocks 
+                    });
+
+                    const option = document.createElement('option');
+                    option.value = file;
+                    option.textContent = docTitle;
+                    documentSelector.appendChild(option);
+                }
+
+                if (loadedDocuments.length === 0) {
+                    resultsContainer.innerHTML = '<p class="no-results" style="color: red;">Nenhum documento foi carregado. Verifique os URLs e permissões de CORS.</p>';
+                } else {
+                    console.log('Documentos carregados com sucesso!', loadedDocuments);
+                    resultsContainer.innerHTML = '<p class="no-results">Digite uma palavra-chave para iniciar a busca ou selecione um documento acima para visualizá-lo.</p>';
+                }
+
+            } catch (error) {
+                console.error('Erro geral ao carregar documentos:', error);
+                resultsContainer.innerHTML = '<p class="no-results" style="color: red;">Erro ao carregar os documentos. Verifique o console para mais detalhes.</p>';
+            }
+        }
+
+        function performSearch() {
+            const searchTerm = normalizeText(searchInput.value.trim());
+            resultsContainer.innerHTML = ''; // Limpa resultados anteriores
+            documentDisplay.style.display = 'none'; // Oculta a exibição do documento completo
+            documentSelector.value = ""; // Limpa a seleção do dropdown
+
+            if (searchTerm.length < 2) {
+                resultsContainer.innerHTML = '<p class="no-results">Digite pelo menos 2 caracteres para buscar.</p>';
+                return;
+            }
+
+            const resultsByDecree = {}; // Objeto para agrupar resultados por decreto
+
+            loadedDocuments.forEach(doc => {
+                const docTitle = doc.title;
+                const highlightRegex = new RegExp(`(${searchInput.value.trim().replace(/[.*+?^${}()|[\]\\]/g, '\\$&')})`, 'gi');
+                
+                doc.articles.forEach(article => {
+                    if (article.normalizedText.includes(searchTerm)) {
+                        if (!resultsByDecree[doc.id]) {
+                            resultsByDecree[doc.id] = {
+                                title: docTitle,
+                                foundArticles: []
+                            };
+                        }
+
+                        const tempDiv = document.createElement('div');
+                        tempDiv.innerHTML = article.originalHtml;
+
+                        const walk = document.createTreeWalker(tempDiv, NodeFilter.SHOW_TEXT, null, false);
+                        let node;
+                        const nodesToReplace = [];
+
+                        while (node = walk.nextNode()) {
+                            const originalText = node.nodeValue;
+                            const newText = originalText.replace(highlightRegex, '<span class="highlight">$&</span>');
+                            if (originalText !== newText) {
+                                nodesToReplace.push({ node: node, newText: newText });
+                            }
+                        }
+
+                        nodesToReplace.forEach(item => {
+                            const newNode = document.createElement('span'); 
+                            newNode.innerHTML = item.newText;
+                            item.node.parentNode.replaceChild(newNode, item.node);
+                        });
+
+                        const highlightedArticleHtml = tempDiv.innerHTML;
+                        
+                        resultsByDecree[doc.id].foundArticles.push(highlightedArticleHtml);
+                    }
+                });
+            });
+
+            let totalFoundArticles = 0;
+            for (const docId in resultsByDecree) {
+                if (resultsByDecree.hasOwnProperty(docId)) {
+                    const decreeData = resultsByDecree[docId];
+                    totalFoundArticles += decreeData.foundArticles.length;
+
+                    let decreeHtml = `
+                        <div class="decree-results-quadrant">
+                            <span class="decree-title">Decreto/Lei: ${decreeData.title}</span>
+                    `;
+
+                    decreeData.foundArticles.forEach(articleHtml => {
+                        const tempDivForText = document.createElement('div');
+                        tempDivForText.innerHTML = articleHtml;
+                        const firstLineText = tempDivForText.textContent.trim().split('\n')[0];
+                        let articleLabel = '';
+                        // Melhorado para pegar Art. completo, ou Cap., § etc.
+                        const match = firstLineText.match(/^(artigo|art)\.?\s*(\d+\S*)|(capítulo|cap\.)\s*(\d+\S*)|(parágrafo|parágrafos|§)\s*(\d+\S*|\S*)/i);
+
+                        if (match) {
+                            if (match[1]) articleLabel = `<span class="doc-reference">Artigo ${match[2]}:</span>`; // Artigo X
+                            else if (match[3]) articleLabel = `<span class="doc-reference">Capítulo ${match[4]}:</span>`; // Capítulo X
+                            else if (match[5]) articleLabel = `<span class="doc-reference">${match[5].charAt(0).toUpperCase() + match[5].slice(1)} ${match[6] || ''}:</span>`; // Parágrafo X, Seção X, § X
+                        } else {
+                            articleLabel = `<span class="doc-reference">Trecho relevante:</span>`;
+                        }
+                        
+                        decreeHtml += `
+                            <div class="document-card">
+                                ${articleLabel}
+                                <div class="found-paragraph">${articleHtml}</div>
+                            </div>
+                        `;
+                    });
+
+                    decreeHtml += `</div>`; 
+                    resultsContainer.innerHTML += decreeHtml;
+                }
+            }
+
+            if (totalFoundArticles === 0) {
+                resultsContainer.innerHTML = `<p class="no-results">Nenhum resultado encontrado para "<strong>${searchInput.value}</strong>".</p>`;
+            } else {
+                resultsContainer.innerHTML = `<h2 style="text-align: left; color: #34495e;">Resultados da busca (${totalFoundArticles} encontrados)</h2>` + resultsContainer.innerHTML;
+            }
+        }
+
+        function displaySelectedDocument() {
+            const selectedFile = documentSelector.value;
+            resultsContainer.innerHTML = ''; 
+            searchInput.value = ''; 
+            documentDisplay.style.display = 'block'; 
+
+            if (selectedFile === "") {
+                documentDisplay.innerHTML = '<p class="no-results">Selecione um documento para visualizá-lo.</p>';
+                return;
+            }
+
+            const doc = loadedDocuments.find(d => d.id === selectedFile);
+            if (doc) {
+                documentDisplay.innerHTML = `<div class="document-full-content">${doc.originalFullHtml}</div>`;
+            } else {
+                documentDisplay.innerHTML = '<p class="no-results" style="color: red;">Erro: Documento não encontrado.</p>';
+            }
+        }
+
+        document.addEventListener('DOMContentLoaded', loadDocuments);
+        searchButton.addEventListener('click', performSearch);
+        searchInput.addEventListener('keypress', (e) => {
+            if (e.key === 'Enter') {
+                performSearch();
+            }
+        });
+        documentSelector.addEventListener('change', displaySelectedDocument);
+    </script>
+
+</body>
+</html>
