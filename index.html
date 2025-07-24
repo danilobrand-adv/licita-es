@@ -4,8 +4,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Consulta Regulamentação Municipal - Nova lei de Licitações e Contratos Públicos</title>
-    <link rel="icon" href="pesquisa.png" type="tipo/da-extensao">
-    <style>
+    <link rel="icon" href="pesquisa.png" type="image/png"> <style>
         body {
             font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
             margin: 0;
@@ -137,7 +136,7 @@
 
     <div class="container">
         <h1>Consulta Regulamentação Municipal - Nova lei de Licitações e Contratos Públicos</h1>
-           <h1>Prefeitura Municipal de Goiana-PE</h1>
+            <h1>Prefeitura Municipal de Goiana-PE</h1>
 
         <div class="search-section">
             <input type="text" id="searchInput" placeholder="Buscar por palavra-chave..." aria-label="Palavra-chave para busca">
@@ -168,22 +167,96 @@
         const resultsContainer = document.getElementById('resultsContainer');
         const documentDisplay = document.getElementById('documentDisplay');
 
-        // Array para armazenar os documentos carregados
         let loadedDocuments = [];
 
-        // Lista de arquivos de decreto/lei na pasta 'decretos/'
-        // ADICIONE AQUI OS NOMES DOS SEUS ARQUIVOS HTML DE DECRETOS/LEIS
         const documentFiles = [
             'DECRETO Nº 007-2024 - REGULAMENTA INEXIGIBILIDADE E DISPENSA.html',
             'DECRETO Nº 027-2024 – REGULA PESQUISA, SISTEMA E LICITAÇÃO NO CRITÉRIO DE MENOR PREÇO.html',
             'DECRETO Nº 038-2024 – REGULA ART. 79 DA LEI 14.133, 1º DE ABRIL 2021, SOBRE CREDENCIAMENTO A CONTRATAÇÃO DE BENS E SERVIÇOS NA ADM PÚBLICA.html',
+            'DECRETO Nº 007-2024 - REGULAMENTA INEXIGIBILIDADE E DISPENSA.html',
+            'DECRETO Nº 027-2024 – REGULA PESQUISA, SISTEMA E LICITAÇÃO NO CRITÉRIO DE MENOR PREÇO.html',
+            'DECRETO Nº 038-2024 – REGULA ART. 79 DA LEI 14.133, 1º DE ABRIL 2021, SOBRE CREDENCIAMENTO A CONTRATAÇÃO DE BENS E SERVIÇOS NA ADM PÚBLICA.html',
             'DECRETO Nº 079-2023 - REGULAMENTA A LEI FEDERAL Nº 14.133 NOS ÓRGÃOS E ENTIDADES DA ADMINISTRAÇÃO VINCULADOS AO PODER EXECUTIVO MUNICIPAL.html',
+            'DECRETO Nº 038-2024 – SOBRE CREDENCIAMENTO A CONTRATAÇÃO DE BENS E SERVIÇOS NA ADM PÚBLICA',
+            'DECRETO Nº 079-2023 - REGULAMENTA A LEI FEDERAL Nº 14.133',
             // Adicione mais nomes de arquivos aqui conforme você criar
         ];
 
-        // Normaliza string (remove acentos e torna minúscula)
         function normalizeText(text) {
             return text.normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase();
+        }
+
+        /**
+         * Extrai artigos de um documento HTML baseado em padrões de texto.
+         * Assume que artigos começam com "Art. [Número]" ou "Artigo [Número]"
+         * ou "Capítulo [Número]" ou "Seção [Número]" ou "§ [Número]" (Parágrafo Único)
+         * e incluem todos os elementos subsequentes até o próximo padrão de artigo/seção.
+         * @param {Document} doc - O objeto Document HTML parseado.
+         * @returns {Array<Object>} Uma lista de objetos de artigo, cada um com originalHtml e normalizedText.
+         */
+        function extractArticles(doc) {
+            const articles = [];
+            let currentArticleHtml = '';
+            let currentArticleText = '';
+            let isInsideArticle = false; // Flag para saber se estamos dentro de um artigo
+
+            // Regex para identificar o início de um novo artigo, parágrafo único, capítulo ou seção.
+            // Ajuste esta regex para ser o mais preciso possível para a estrutura dos seus documentos.
+            const articleStartRegex = /^(artigo|art)\.?\s+\d+|capítulo\s+\w+|seção\s+\w+|parágrafo\s+único|parágrafo|§\s+\d+/i;
+
+            // Coleta todos os elementos de bloco que podem conter texto de artigos
+            const potentialBlocks = doc.body.querySelectorAll('p, div, h1, h2, h3, h4, h5, h6, li, span'); 
+
+            potentialBlocks.forEach(node => {
+                const textContent = node.textContent.trim();
+                const outerHtml = node.outerHTML;
+
+                if (!textContent) {
+                    // Ignora elementos vazios
+                    return;
+                }
+
+                // Tenta identificar o início de um novo artigo/seção
+                const isArticleStart = articleStartRegex.test(textContent);
+
+                if (isArticleStart && currentArticleHtml !== '') {
+                    // Se encontrarmos um novo artigo e já estamos coletando um,
+                    // significa que o artigo anterior terminou.
+                    articles.push({
+                        originalHtml: currentArticleHtml,
+                        normalizedText: normalizeText(currentArticleText)
+                    });
+                    // Reinicia para o novo artigo
+                    currentArticleHtml = '';
+                    currentArticleText = '';
+                    isInsideArticle = false; // Reinicia a flag
+                }
+                
+                // Se o nó atual é o início de um artigo ou se estamos dentro de um artigo
+                if (isArticleStart || isInsideArticle) {
+                    currentArticleHtml += outerHtml;
+                    currentArticleText += textContent + ' ';
+                    isInsideArticle = true; // Define a flag para indicar que estamos dentro de um artigo
+                } else {
+                    // Se não estamos dentro de um artigo e não é o início de um, 
+                    // e o texto não é apenas espaçamento, considere como um bloco avulso.
+                    // Isso pode ser ajustado dependendo se você quer que "preâmbulos" ou 
+                    // textos antes do primeiro artigo sejam indexados como artigos separados.
+                    articles.push({
+                        originalHtml: outerHtml,
+                        normalizedText: normalizeText(textContent)
+                    });
+                }
+            });
+
+            // Adiciona o último artigo, se houver
+            if (currentArticleHtml !== '') {
+                articles.push({
+                    originalHtml: currentArticleHtml,
+                    normalizedText: normalizeText(currentArticleText)
+                });
+            }
+            return articles;
         }
 
         async function loadDocuments() {
@@ -203,58 +276,29 @@
                         const parser = new DOMParser();
                         const doc = parser.parseFromString(htmlText, 'text/html');
 
-                        // Título do documento será o nome do arquivo sem a extensão
                         const docTitle = file.replace('.html', '');
 
-                        const textBlocks = [];
-                        // Itera sobre todos os nós filhos do body para capturar blocos de texto
-                        doc.body.childNodes.forEach(node => {
-                            if (node.nodeType === Node.ELEMENT_NODE) {
-                                // Priorizamos P, DIV, e cabeçalhos, mas você pode ajustar se seus decretos
-                                // usam outras tags para artigos.
-                                if (['P', 'DIV', 'H1', 'H2', 'H3', 'LI', 'SPAN'].includes(node.tagName)) {
-                                    const originalHtmlContent = node.outerHTML; 
-                                    const textContent = node.textContent.trim(); 
-
-                                    if (textContent) {
-                                        textBlocks.push({
-                                            originalHtml: originalHtmlContent,
-                                            normalizedText: normalizeText(textContent)
-                                        });
-                                    }
-                                }
-                            } else if (node.nodeType === Node.TEXT_NODE) { 
-                                const textContent = node.textContent.trim();
-                                if (textContent) {
-                                    textBlocks.push({
-                                        originalHtml: `<span>${textContent}</span>`, // Envolve texto solto em span
-                                        normalizedText: normalizeText(textContent)
-                                    });
-                                }
-                            }
-                        });
+                        // *** AQUI É A GRANDE MUDANÇA: Usamos a nova função extractArticles ***
+                        const extractedArticles = extractArticles(doc);
 
                         loadedDocuments.push({
-                            id: file, // Usar o nome do arquivo como ID
+                            id: file, 
                             title: docTitle,
-                            originalFullHtml: htmlText, // Guarda o HTML original completo para exibição completa
-                            articles: textBlocks // Armazena os blocos de texto como "artigos"
+                            originalFullHtml: htmlText, 
+                            articles: extractedArticles // Agora 'articles' contém unidades de artigo completo
                         });
 
-                        // Adiciona ao seletor
                         const option = document.createElement('option');
                         option.value = file;
                         option.textContent = docTitle;
                         documentSelector.appendChild(option);
                     } catch (innerError) {
                         console.error(`Falha ao carregar ou processar o arquivo "${file}":`, innerError);
-                        // Poderíamos adicionar uma notificação ao usuário aqui, mas por enquanto, apenas logar.
                     }
                 });
 
                 await Promise.all(fetches);
                 console.log('Documentos carregados com sucesso!', loadedDocuments);
-                // Define a mensagem inicial após o carregamento
                 resultsContainer.innerHTML = '<p class="no-results">Digite uma palavra-chave para iniciar a busca ou selecione um documento acima para visualizá-lo.</p>';
 
             } catch (error) {
@@ -265,16 +309,16 @@
 
         function performSearch() {
             const searchTerm = normalizeText(searchInput.value.trim());
-            resultsContainer.innerHTML = ''; // Limpa resultados anteriores
-            documentDisplay.style.display = 'none'; // Oculta a exibição do documento completo
-            documentSelector.value = ""; // Limpa a seleção do dropdown
+            resultsContainer.innerHTML = ''; 
+            documentDisplay.style.display = 'none'; 
+            documentSelector.value = ""; 
 
             if (searchTerm.length < 2) {
                 resultsContainer.innerHTML = '<p class="no-results">Digite pelo menos 2 caracteres para buscar.</p>';
                 return;
             }
 
-            const resultsByDecree = {}; // Objeto para agrupar resultados por decreto
+            const resultsByDecree = {};
 
             loadedDocuments.forEach(doc => {
                 const docTitle = doc.title;
@@ -282,7 +326,6 @@
                 
                 doc.articles.forEach(article => {
                     if (article.normalizedText.includes(searchTerm)) {
-                        // Se for a primeira vez que encontramos algo neste decreto, inicializamos o array
                         if (!resultsByDecree[doc.id]) {
                             resultsByDecree[doc.id] = {
                                 title: docTitle,
@@ -290,27 +333,36 @@
                             };
                         }
 
-                        // Criar uma cópia do HTML original do artigo para manipular e adicionar o highlight
+                        // Criar uma cópia do HTML original do ARTIGO COMPLETO para manipular e adicionar o highlight
                         const tempDiv = document.createElement('div');
-                        tempDiv.innerHTML = article.originalHtml;
+                        tempDiv.innerHTML = article.originalHtml; // Usa o HTML completo do artigo
 
-                        // Percorre os nós de texto dentro do elemento para aplicar o highlight
                         const walk = document.createTreeWalker(tempDiv, NodeFilter.SHOW_TEXT, null, false);
                         let node;
                         const nodesToReplace = [];
 
                         while (node = walk.nextNode()) {
                             const originalText = node.nodeValue;
+                            // Previne que tags de highlight sejam criadas dentro de outras, 
+                            // mas ainda permite que o texto dentro de tags HTML seja destacado.
+                            // Isso é um pouco mais robusto.
+                            if (node.parentNode.nodeName.toLowerCase() === 'span' && node.parentNode.classList.contains('highlight')) {
+                                continue; // Já é um highlight, não faz nada
+                            }
+
+                            // Use um replace que cria um span para cada ocorrência da palavra
                             const newText = originalText.replace(highlightRegex, '<span class="highlight">$&</span>');
                             if (originalText !== newText) {
                                 nodesToReplace.push({ node: node, newText: newText });
                             }
                         }
 
+                        // Realiza as substituições de forma segura para não bagunçar o TreeWalker
                         nodesToReplace.forEach(item => {
-                            const newNode = document.createElement('span'); 
-                            newNode.innerHTML = item.newText;
-                            item.node.parentNode.replaceChild(newNode, item.node);
+                            const range = document.createRange();
+                            range.selectNode(item.node);
+                            const fragment = range.createContextualFragment(item.newText);
+                            item.node.parentNode.replaceChild(fragment, item.node);
                         });
 
                         const highlightedArticleHtml = tempDiv.innerHTML;
@@ -321,7 +373,6 @@
             });
 
             let totalFoundArticles = 0;
-            // Iterar sobre os resultados agrupados para construir o HTML final
             for (const docId in resultsByDecree) {
                 if (resultsByDecree.hasOwnProperty(docId)) {
                     const decreeData = resultsByDecree[docId];
@@ -333,28 +384,15 @@
                     `;
 
                     decreeData.foundArticles.forEach(articleHtml => {
-                        // Opcional: Tentar identificar se é um "Artigo" para adicionar um prefixo
-                        const tempDivForText = document.createElement('div');
-                        tempDivForText.innerHTML = articleHtml;
-                        const firstLineText = tempDivForText.textContent.trim().split('\n')[0];
-                        let articleLabel = '';
-                        if (firstLineText.match(/^(artigo|art)\.?\s+\d+|capítulo|cap\.\s+\d+|parágrafo|parágrafos|seção|seções|§/i)) {
-                            // Pega a primeira linha ou um trecho que pareça um título de artigo/seção
-                            articleLabel = `<span class="doc-reference">Artigo/Seção:</span>`;
-                        } else {
-                             // Se não for um artigo claro, apenas um parágrafo que contém o termo
-                             articleLabel = `<span class="doc-reference">Trecho relevante:</span>`;
-                        }
-                        
                         decreeHtml += `
                             <div class="document-card">
-                                ${articleLabel}
+                                <span class="doc-reference">Artigo/Seção:</span>
                                 <div class="found-paragraph">${articleHtml}</div>
                             </div>
                         `;
                     });
 
-                    decreeHtml += `</div>`; // Fecha o quadrante do decreto
+                    decreeHtml += `</div>`; 
                     resultsContainer.innerHTML += decreeHtml;
                 }
             }
@@ -366,12 +404,11 @@
             }
         }
 
-        // Exibição de Documento Completo
         function displaySelectedDocument() {
             const selectedFile = documentSelector.value;
-            resultsContainer.innerHTML = ''; // Limpa resultados da busca
-            searchInput.value = ''; // Limpa o campo de busca
-            documentDisplay.style.display = 'block'; // Mostra a área de exibição
+            resultsContainer.innerHTML = ''; 
+            searchInput.value = ''; 
+            documentDisplay.style.display = 'block'; 
 
             if (selectedFile === "") {
                 documentDisplay.innerHTML = '<p class="no-results">Selecione um documento para visualizá-lo.</p>';
@@ -380,14 +417,12 @@
 
             const doc = loadedDocuments.find(d => d.id === selectedFile);
             if (doc) {
-                // Exibe o HTML original completo do documento
                 documentDisplay.innerHTML = `<div class="document-full-content">${doc.originalFullHtml}</div>`;
             } else {
                 documentDisplay.innerHTML = '<p class="no-results" style="color: red;">Erro: Documento não encontrado.</p>';
             }
         }
 
-        // Event Listeners
         document.addEventListener('DOMContentLoaded', loadDocuments);
         searchButton.addEventListener('click', performSearch);
         searchInput.addEventListener('keypress', (e) => {
