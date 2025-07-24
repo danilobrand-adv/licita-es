@@ -4,7 +4,8 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Consulta Regulamentação Municipal - Nova lei de Licitações e Contratos Públicos</title>
-    <link rel="icon" href="pesquisa.png" type="image/png"> <style>
+    <link rel="icon" href="pesquisa.png" type="image/png">
+    <style>
         body {
             font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
             margin: 0;
@@ -64,9 +65,9 @@
             margin-top: 20px;
         }
         
-        /* Novo estilo para os "quadrantes" de resultados de cada decreto */
+        /* Estilo para os "quadrantes" de resultados de cada decreto */
         .decree-results-quadrant {
-            background-color: #eaf3f8; /* Um azul bem clarinho para o quadrante */
+            background-color: #eaf3f8; /* Azul claro para o quadrante */
             border: 1px solid #cce7f4;
             padding: 20px;
             margin-bottom: 25px; /* Espaço entre os quadrantes de decretos diferentes */
@@ -105,11 +106,35 @@
             line-height: 1.6;
             margin-top: 10px;
             margin-bottom: 0;
+            overflow-wrap: break-word; /* Ajuda com quebras de linha em textos longos */
+            color: #333; 
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            font-size: 1em; 
         }
+        /* Ajuste para garantir que P, LI, Hx etc. dentro de .found-paragraph mantenham o estilo do documento original */
+        .document-card .found-paragraph p,
+        .document-card .found-paragraph ul,
+        .document-card .found-paragraph ol,
+        .document-card .found-paragraph li,
+        .document-card .found-paragraph h1,
+        .document-card .found-paragraph h2,
+        .document-card .found-paragraph h3,
+        .document-card .found-paragraph h4,
+        .document-card .found-paragraph h5,
+        .document-card .found-paragraph h6,
+        .document-card .found-paragraph div,
+        .document-card .found-paragraph span {
+            margin: 0; 
+            padding: 0;
+            margin-bottom: 0.5em; 
+            list-style-position: inside; 
+        }
+
         .highlight {
             background-color: #ffe082; /* Amarelo mais suave */
             padding: 2px 4px;
             border-radius: 3px;
+            font-weight: bold; 
         }
         #documentDisplay h2 {
             text-align: left;
@@ -170,90 +195,18 @@
         let loadedDocuments = [];
 
         const documentFiles = [
-            'DECRETO Nº 007-2024 - REGULAMENTA INEXIGIBILIDADE E DISPENSA.html',
+             'DECRETO Nº 007-2024 - REGULAMENTA INEXIGIBILIDADE E DISPENSA.html',
             'DECRETO Nº 027-2024 – REGULA PESQUISA, SISTEMA E LICITAÇÃO NO CRITÉRIO DE MENOR PREÇO.html',
             'DECRETO Nº 038-2024 – REGULA ART. 79 DA LEI 14.133, 1º DE ABRIL 2021, SOBRE CREDENCIAMENTO A CONTRATAÇÃO DE BENS E SERVIÇOS NA ADM PÚBLICA.html',
             'DECRETO Nº 079-2023 - REGULAMENTA A LEI FEDERAL Nº 14.133 NOS ÓRGÃOS E ENTIDADES DA ADMINISTRAÇÃO VINCULADOS AO PODER EXECUTIVO MUNICIPAL.html',
-            
-            // Adicione mais nomes de arquivos aqui conforme você criar
         ];
 
         function normalizeText(text) {
             return text.normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase();
         }
 
-        /**
-         * Extrai artigos de um documento HTML baseado em padrões de texto.
-         * Assume que artigos começam com "Art. [Número]" ou "Artigo [Número]"
-         * ou "Capítulo [Número]" ou "Seção [Número]" ou "§ [Número]" (Parágrafo Único)
-         * e incluem todos os elementos subsequentes até o próximo padrão de artigo/seção.
-         * @param {Document} doc - O objeto Document HTML parseado.
-         * @returns {Array<Object>} Uma lista de objetos de artigo, cada um com originalHtml e normalizedText.
-         */
-        function extractArticles(doc) {
-            const articles = [];
-            let currentArticleHtml = '';
-            let currentArticleText = '';
-            let isInsideArticle = false; // Flag para saber se estamos dentro de um artigo
-
-            // Regex para identificar o início de um novo artigo, parágrafo único, capítulo ou seção.
-            // Ajuste esta regex para ser o mais preciso possível para a estrutura dos seus documentos.
-            const articleStartRegex = /^(artigo|art)\.?\s+\d+|capítulo\s+\w+|seção\s+\w+|parágrafo\s+único|parágrafo|§\s+\d+/i;
-
-            // Coleta todos os elementos de bloco que podem conter texto de artigos
-            const potentialBlocks = doc.body.querySelectorAll('p, div, h1, h2, h3, h4, h5, h6, li, span'); 
-
-            potentialBlocks.forEach(node => {
-                const textContent = node.textContent.trim();
-                const outerHtml = node.outerHTML;
-
-                if (!textContent) {
-                    // Ignora elementos vazios
-                    return;
-                }
-
-                // Tenta identificar o início de um novo artigo/seção
-                const isArticleStart = articleStartRegex.test(textContent);
-
-                if (isArticleStart && currentArticleHtml !== '') {
-                    // Se encontrarmos um novo artigo e já estamos coletando um,
-                    // significa que o artigo anterior terminou.
-                    articles.push({
-                        originalHtml: currentArticleHtml,
-                        normalizedText: normalizeText(currentArticleText)
-                    });
-                    // Reinicia para o novo artigo
-                    currentArticleHtml = '';
-                    currentArticleText = '';
-                    isInsideArticle = false; // Reinicia a flag
-                }
-                
-                // Se o nó atual é o início de um artigo ou se estamos dentro de um artigo
-                if (isArticleStart || isInsideArticle) {
-                    currentArticleHtml += outerHtml;
-                    currentArticleText += textContent + ' ';
-                    isInsideArticle = true; // Define a flag para indicar que estamos dentro de um artigo
-                } else {
-                    // Se não estamos dentro de um artigo e não é o início de um, 
-                    // e o texto não é apenas espaçamento, considere como um bloco avulso.
-                    // Isso pode ser ajustado dependendo se você quer que "preâmbulos" ou 
-                    // textos antes do primeiro artigo sejam indexados como artigos separados.
-                    articles.push({
-                        originalHtml: outerHtml,
-                        normalizedText: normalizeText(textContent)
-                    });
-                }
-            });
-
-            // Adiciona o último artigo, se houver
-            if (currentArticleHtml !== '') {
-                articles.push({
-                    originalHtml: currentArticleHtml,
-                    normalizedText: normalizeText(currentArticleText)
-                });
-            }
-            return articles;
-        }
+        // Regex para identificar o início de um bloco de artigo/capítulo/seção.
+        const articleBlockStartRegex = /^(artigo|art)\.?\s*((\d+)|([IVXLCDM]+))|^capítulo\s*((\d+)|([IVXLCDM]+))|^seção\s*((\d+)|([IVXLCDM]+))|^parágrafo\s+único|^\u00A7\s*\d+/i;
 
         async function loadDocuments() {
             resultsContainer.innerHTML = '<p class="loading-message">Carregando documentos...</p>';
@@ -274,14 +227,24 @@
 
                         const docTitle = file.replace('.html', '');
 
-                        // *** AQUI É A GRANDE MUDANÇA: Usamos a nova função extractArticles ***
-                        const extractedArticles = extractArticles(doc);
+                        // Extrair todos os elementos de bloco do body em ordem para facilitar a busca
+                        const bodyElements = Array.from(doc.body.children);
+                        const processedElements = bodyElements.map(element => {
+                            return {
+                                element: element, // Referência ao elemento original do DOM parseado
+                                html: element.outerHTML,
+                                text: element.textContent.trim(),
+                                normalizedText: normalizeText(element.textContent.trim()),
+                                isArticleStart: articleBlockStartRegex.test(element.textContent.trim())
+                            };
+                        });
 
                         loadedDocuments.push({
                             id: file, 
                             title: docTitle,
                             originalFullHtml: htmlText, 
-                            articles: extractedArticles // Agora 'articles' contém unidades de artigo completo
+                            parsedDoc: doc, // Armazena o DOM parseado para display completo
+                            processedElements: processedElements // Lista de elementos de bloco com metadados
                         });
 
                         const option = document.createElement('option');
@@ -314,59 +277,95 @@
                 return;
             }
 
-            const resultsByDecree = {};
+            const resultsByDecree = {}; 
+            // Cuidado: a highlightRegex deve usar o searchTerm original para o destaque,
+            // mas o normalizedText para a busca.
+            const highlightRegex = new RegExp(`(${searchInput.value.trim().replace(/[.*+?^${}()|[\]\\]/g, '\\$&')})`, 'gi');
 
-            loadedDocuments.forEach(doc => {
-                const docTitle = doc.title;
-                const highlightRegex = new RegExp(`(${searchInput.value.trim().replace(/[.*+?^${}()|[\]\\]/g, '\\$&')})`, 'gi');
-                
-                doc.articles.forEach(article => {
-                    if (article.normalizedText.includes(searchTerm)) {
-                        if (!resultsByDecree[doc.id]) {
-                            resultsByDecree[doc.id] = {
-                                title: docTitle,
-                                foundArticles: []
-                            };
-                        }
+            loadedDocuments.forEach(docData => {
+                const docTitle = docData.title;
+                const processedElements = docData.processedElements;
+                const foundOccurrences = [];
 
-                        // Criar uma cópia do HTML original do ARTIGO COMPLETO para manipular e adicionar o highlight
-                        const tempDiv = document.createElement('div');
-                        tempDiv.innerHTML = article.originalHtml; // Usa o HTML completo do artigo
+                processedElements.forEach((block, index) => {
+                    if (block.normalizedText.includes(searchTerm)) {
+                        let articleStartIndex = -1;
+                        let articleTitle = 'Contexto sem Artigo Específico';
 
-                        const walk = document.createTreeWalker(tempDiv, NodeFilter.SHOW_TEXT, null, false);
-                        let node;
-                        const nodesToReplace = [];
-
-                        while (node = walk.nextNode()) {
-                            const originalText = node.nodeValue;
-                            // Previne que tags de highlight sejam criadas dentro de outras, 
-                            // mas ainda permite que o texto dentro de tags HTML seja destacado.
-                            // Isso é um pouco mais robusto.
-                            if (node.parentNode.nodeName.toLowerCase() === 'span' && node.parentNode.classList.contains('highlight')) {
-                                continue; // Já é um highlight, não faz nada
-                            }
-
-                            // Use um replace que cria um span para cada ocorrência da palavra
-                            const newText = originalText.replace(highlightRegex, '<span class="highlight">$&</span>');
-                            if (originalText !== newText) {
-                                nodesToReplace.push({ node: node, newText: newText });
+                        // Busca retroativa pelo início do artigo mais próximo
+                        for (let i = index; i >= 0; i--) {
+                            if (processedElements[i].isArticleStart) {
+                                articleStartIndex = i;
+                                articleTitle = processedElements[i].text.split('\n')[0].trim(); // Pega a primeira linha
+                                break;
                             }
                         }
 
-                        // Realiza as substituições de forma segura para não bagunçar o TreeWalker
-                        nodesToReplace.forEach(item => {
+                        let htmlToDisplay = [];
+                        if (articleStartIndex !== -1) {
+                            // Coleta todos os blocos desde o início do artigo até o bloco atual (inclusive)
+                            for (let i = articleStartIndex; i <= index; i++) {
+                                htmlToDisplay.push(processedElements[i].html);
+                            }
+                        } else {
+                            // Se não encontrou um Art.XX, exibe apenas o bloco encontrado
+                            htmlToDisplay.push(block.html);
+                        }
+
+                        const tempDivForHighlight = document.createElement('div');
+                        tempDivForHighlight.innerHTML = htmlToDisplay.join('\n');
+
+                        // Agora, vamos encontrar o nó de texto *dentro* do tempDivForHighlight
+                        // que corresponde ao conteúdo original do bloco encontrado (`block.text`)
+                        // e aplicar o destaque apenas nele. Isso é mais robusto do que TreeWalker no full HTML.
+
+                        // O desafio aqui é que `block.element` é do `parsedDoc` original, não de `tempDivForHighlight`.
+                        // Precisamos iterar sobre os nós de texto dentro de `tempDivForHighlight`
+                        // e aplicar o highlight onde a palavra-chave é encontrada.
+
+                        // Percorrer os nós de texto dentro do tempDivForHighlight
+                        const highlightWalker = document.createTreeWalker(
+                            tempDivForHighlight, 
+                            NodeFilter.SHOW_TEXT, 
+                            null, 
+                            false
+                        );
+                        let highlightNode;
+                        const highlightNodesToReplace = [];
+
+                        while (highlightNode = highlightWalker.nextNode()) {
+                            const currentText = highlightNode.nodeValue;
+                            const newText = currentText.replace(highlightRegex, '<span class="highlight">$&</span>');
+                            if (currentText !== newText) {
+                                highlightNodesToReplace.push({ node: highlightNode, newText: newText });
+                            }
+                        }
+
+                        // Realiza as substituições
+                        highlightNodesToReplace.forEach(item => {
                             const range = document.createRange();
                             range.selectNode(item.node);
                             const fragment = range.createContextualFragment(item.newText);
                             item.node.parentNode.replaceChild(fragment, item.node);
                         });
 
-                        const highlightedArticleHtml = tempDiv.innerHTML;
-                        
-                        resultsByDecree[doc.id].foundArticles.push(highlightedArticleHtml);
+                        foundOccurrences.push({
+                            html: tempDivForHighlight.innerHTML,
+                            title: articleTitle
+                        });
                     }
-                });
-            });
+                }); // Fim do forEach processedElements
+
+                if (foundOccurrences.length > 0) {
+                    if (!resultsByDecree[docData.id]) {
+                        resultsByDecree[docData.id] = {
+                            title: docTitle,
+                            foundArticles: []
+                        };
+                    }
+                    resultsByDecree[docData.id].foundArticles.push(...foundOccurrences);
+                }
+            }); // Fim do forEach loadedDocuments
 
             let totalFoundArticles = 0;
             for (const docId in resultsByDecree) {
@@ -379,11 +378,11 @@
                             <span class="decree-title">Decreto/Lei: ${decreeData.title}</span>
                     `;
 
-                    decreeData.foundArticles.forEach(articleHtml => {
+                    decreeData.foundArticles.forEach(foundArticle => { 
                         decreeHtml += `
                             <div class="document-card">
-                                <span class="doc-reference">Artigo/Seção:</span>
-                                <div class="found-paragraph">${articleHtml}</div>
+                                <span class="doc-reference">${foundArticle.title}:</span> 
+                                <div class="found-paragraph">${foundArticle.html}</div>
                             </div>
                         `;
                     });
